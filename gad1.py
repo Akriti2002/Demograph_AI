@@ -1,15 +1,18 @@
 import cv2
 import math
 import argparse
+import os
 
 def highlightFace(net, frame, conf_threshold=0.7):
     frameOpencvDnn=frame.copy()
     frameHeight=frameOpencvDnn.shape[0]
     frameWidth=frameOpencvDnn.shape[1]
-    blob=cv2.dnn.blobFromImage(frameOpencvDnn, 1.0, (300, 300), [104, 117, 123], True, False)
+    blob=cv2.dnn.blobFromImage(frameOpencvDnn, 1.0,
+		                       (300, 300), [104, 117, 123], True, False)
 
     net.setInput(blob)
-    detections=net.forward()
+    detections=net.forward()    
+    
     faceBoxes=[]
     for i in range(detections.shape[2]):
         confidence=detections[0,0,i,2]
@@ -19,7 +22,8 @@ def highlightFace(net, frame, conf_threshold=0.7):
             x2=int(detections[0,0,i,5]*frameWidth)
             y2=int(detections[0,0,i,6]*frameHeight)
             faceBoxes.append([x1,y1,x2,y2])
-            cv2.rectangle(frameOpencvDnn, (x1,y1), (x2,y2), (0,255,0), int(round(frameHeight/150)), 8)
+            cv2.rectangle(frameOpencvDnn, (x1,y1), (x2,y2), (0,255,0),
+						   int(round(frameHeight/150)), 8)
     return frameOpencvDnn,faceBoxes
 
 
@@ -28,15 +32,39 @@ parser.add_argument('--image')
 
 args=parser.parse_args()
 
-faceProto="opencv_face_detector.pbtxt"
-faceModel="opencv_face_detector_uint8.pb"
-ageProto="age_deploy.prototxt"
-ageModel="age_net.caffemodel"
-genderProto="gender_deploy.prototxt"
-genderModel="gender_net.caffemodel"
+# Get the directory where this script is located
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+faceProto=os.path.join(script_dir, "opencv_face_detector.pbtxt")
+faceModel=os.path.join(script_dir, "opencv_face_detector_uint8.pb")
+ageProto=os.path.join(script_dir, "age_deploy.prototxt")
+ageModel=os.path.join(script_dir, "age_net.caffemodel")
+genderProto=os.path.join(script_dir, "gender_deploy.prototxt")
+genderModel=os.path.join(script_dir, "gender_net.caffemodel")
+
+# Check if model files exist
+model_files = {
+    "Face Proto": faceProto,
+    "Face Model": faceModel,
+    "Age Proto": ageProto,
+    "Age Model": ageModel,
+    "Gender Proto": genderProto,
+    "Gender Model": genderModel
+}
+
+missing_files = []
+for name, path in model_files.items():
+    if not os.path.exists(path):
+        missing_files.append(f"{name}: {path}")
+
+if missing_files:
+    error_msg = "Missing model files:\n" + "\n".join(missing_files)
+    error_msg += f"\n\nScript directory: {script_dir}"
+    raise FileNotFoundError(error_msg)
 
 MODEL_MEAN_VALUES=(78.4263377603, 87.7689143744, 114.895847746)
-ageList=['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)', '(48-53)', '(60-100)']
+ageList=['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)',
+		  '(48-53)', '(60-100)']
 genderList=['Male','Female']
 
 faceNet=cv2.dnn.readNet(faceModel,faceProto)
@@ -44,7 +72,9 @@ ageNet=cv2.dnn.readNet(ageModel,ageProto)
 genderNet=cv2.dnn.readNet(genderModel,genderProto)
 
 def show(image):
-	video=cv2.VideoCapture('faces/'+image)
+	faces_dir = os.path.join(script_dir, 'faces')
+	static_dir = os.path.join(script_dir, 'static')
+	video=cv2.VideoCapture(os.path.join(faces_dir, image))
 	padding=20
 	
 	hasFrame,frame=video.read()
@@ -72,12 +102,14 @@ def show(image):
 		age=ageList[agePreds[0].argmax()]
 		print(f'Age: {age[1:-1]} years')
 
-		cv2.putText(resultImg, f'{gender}, {age}', (faceBox[0], faceBox[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2, cv2.LINE_AA)
-		value = cv2.imwrite('static/'+image, resultImg)
+		cv2.putText(resultImg, f'{gender}, {age}', (faceBox[0], faceBox[1]-10),
+			   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2, cv2.LINE_AA)
+		value = cv2.imwrite(os.path.join(static_dir, image), resultImg)
 		return value
 def capture():
 	video=cv2.VideoCapture(0)
 	padding=20
+	static_dir = os.path.join(script_dir, 'static')
 	
 	hasFrame,frame=video.read()
 	if not hasFrame:
@@ -106,8 +138,9 @@ def capture():
 		import random
 		filename = str(random.randint(1000, 9999))
 		filename += '.jpg'
-		cv2.putText(resultImg, f'{gender}, {age}', (faceBox[0], faceBox[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2, cv2.LINE_AA)
-		value = cv2.imwrite('static/'+filename, resultImg)
+		cv2.putText(resultImg, f'{gender}, {age}', (faceBox[0], faceBox[1]-10),
+			   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2, cv2.LINE_AA)
+		value = cv2.imwrite(os.path.join(static_dir, filename), resultImg)
 		return filename
 			
 
